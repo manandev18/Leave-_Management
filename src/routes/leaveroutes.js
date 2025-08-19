@@ -75,7 +75,10 @@ router.get("/", async (req, res) => {
  *         description: Leave not found or already processed
  *       500:
  *         description: Server error
- *
+ */
+
+/**
+ * @swagger
  * /api/leaves/{id}/reject:
  *   put:
  *     summary: Reject a leave request
