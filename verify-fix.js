@@ -1,80 +1,46 @@
-// Comprehensive verification script to test all fixes
-const db = require('./src/db');
+const axios = require('axios');
 
-async function testDatabase() {
+// Test CORS configuration
+async function testCORS() {
+  const baseURL = process.env.DEPLOYMENT_URL || 'http://localhost:5000';
+  
+  console.log('Testing CORS configuration...');
+  console.log('Base URL:', baseURL);
+  console.log('Frontend URL:', process.env.FRONTEND_URL || 'http://localhost:3000');
+  
   try {
-    console.log('=== Testing Database Connection ===');
+    // Test preflight request
+    const response = await axios.options(`${baseURL}/api/leaves`, {
+      headers: {
+        'Origin': process.env.FRONTEND_URL || 'http://localhost:3000'
+      }
+    });
     
-    // Test basic connection
-    const [employees] = await db.query('SELECT * FROM employees LIMIT 1');
-    console.log('✅ Database connection successful!');
-    console.log('Sample employee:', employees[0]);
+    console.log('✅ CORS preflight test passed');
+    console.log('Access-Control-Allow-Origin:', response.headers['access-control-allow-origin']);
     
-    // Test column names
-    const [employeeColumns] = await db.query('DESCRIBE employees');
-    console.log('✅ Employee columns:', employeeColumns.map(col => col.Field));
+    // Test actual request
+    const actualResponse = await axios.get(`${baseURL}/api/leaves`, {
+      headers: {
+        'Origin': process.env.FRONTEND_URL || 'http://localhost:3000'
+      }
+    });
     
-    const [leaveColumns] = await db.query('DESCRIBE leaves');
-    console.log('✅ Leave columns:', leaveColumns.map(col => col.Field));
-    
-    // Test leave application with correct column names
-    console.log('\n=== Testing Leave Application ===');
-    
-    // Insert a test employee if none exists
-    const [employeeCount] = await db.query('SELECT COUNT(*) as count FROM employees');
-    if (employeeCount[0].count === 0) {
-      await db.query(
-        "INSERT INTO employees (name, email, department, joining_date, leave_balance) VALUES (?, ?, ?, ?, ?)",
-        ['Test Employee', 'test@company.com', 'IT', '2024-01-01', 20]
-      );
-      console.log('✅ Test employee created');
-    }
-    
-    // Test leave application
-    const [testEmployee] = await db.query('SELECT id FROM employees LIMIT 1');
-    const [leaveResult] = await db.query(
-      "INSERT INTO leaves (employee_id, start_date, end_date, status) VALUES (?, ?, ?, 'PENDING')",
-      [testEmployee[0].id, '2024-12-20', '2024-12-25']
-    );
-    console.log('✅ Leave application successful:', leaveResult.insertId);
-    
-    // Test leave approval
-    const [approveResult] = await db.query(
-      "UPDATE leaves SET status = 'APPROVED' WHERE id = ? AND status = 'PENDING'",
-      [leaveResult.insertId]
-    );
-    console.log('✅ Leave approval successful:', approveResult.affectedRows > 0);
-    
-    // Test leave rejection
-    const [leaveResult2] = await db.query(
-      "INSERT INTO leaves (employee_id, start_date, end_date, status) VALUES (?, ?, ?, 'PENDING')",
-      [testEmployee[0].id, '2024-12-26', '2024-12-28']
-    );
-    const [rejectResult] = await db.query(
-      "UPDATE leaves SET status = 'REJECTED' WHERE id = ? AND status = 'PENDING'",
-      [leaveResult2.insertId]
-    );
-    console.log('✅ Leave rejection successful:', rejectResult.affectedRows > 0);
-    
-    // Test data retrieval
-    const [allLeaves] = await db.query(`
-      SELECT l.*, e.name as employee_name 
-      FROM leaves l 
-      JOIN employees e ON l.employee_id = e.id
-    `);
-    console.log('✅ Data retrieval successful:', allLeaves.length, 'leaves found');
-    
-    console.log('\n=== All Tests Passed! ===');
-    console.log('✅ Column name mismatch fixed');
-    console.log('✅ Leave application working');
-    console.log('✅ Leave approval working');
-    console.log('✅ Leave rejection working');
+    console.log('✅ CORS actual request test passed');
+    console.log('Response status:', actualResponse.status);
     
   } catch (error) {
-    console.error('❌ Database error:', error);
-  } finally {
-    process.exit(0);
+    console.error('❌ CORS test failed:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response headers:', error.response.headers);
+    }
   }
 }
 
-testDatabase();
+// Run the test
+if (require.main === module) {
+  testCORS();
+}
+
+module.exports = { testCORS };
