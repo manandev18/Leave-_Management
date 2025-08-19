@@ -21,8 +21,10 @@ const corsOptions = {
       'http://127.0.0.1:3000',
       'http://127.0.0.1:5173',
       'http://127.0.0.1:8080',
-      process.env.FRONTEND_URL, // Production frontend URL
-      process.env.DEPLOYMENT_URL  // Additional deployment URL
+      'https://leave-management-z7c2.onrender.com', // Your deployed backend
+      'https://your-frontend-domain.com', // Your frontend URL
+      process.env.FRONTEND_URL, // Additional frontend URL from env
+      process.env.DEPLOYMENT_URL  // Additional deployment URL from env
     ].filter(Boolean); // Remove undefined/null values
     
     // Allow requests with no origin (like mobile apps or curl)
@@ -56,8 +58,12 @@ const swaggerOptions = {
     },
     servers: [
       {
-        url: process.env.DEPLOYMENT_URL || `http://localhost:${PORT}`,
-        description: process.env.NODE_ENV === 'production' ? 'Production server' : 'Development server'
+        url: 'https://leave-management-z7c2.onrender.com',
+        description: 'Production server (Render)'
+      },
+      {
+        url: `http://localhost:${PORT}`,
+        description: 'Development server'
       },
     ],
   },
