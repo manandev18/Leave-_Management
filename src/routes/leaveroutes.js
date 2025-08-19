@@ -99,19 +99,71 @@ router.get("/", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const { employee_id, start_date, end_date } = req.body;
+
+    // 1️⃣ Fetch employee joining date and leave quota
+    const [employee] = await db.query(
+      "SELECT joining_date, leave_balance FROM employees WHERE id = ?",
+      [employee_id]
+    );
+
+    if (employee.length === 0) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+
+    const joiningDate = new Date(employee[0].joining_date);
+    const startDate = new Date(start_date);
+    const endDate = new Date(end_date);
+
+    // 2️⃣ Validation: start_date must be after joining_date
+    if (startDate < joiningDate) {
+      return res
+        .status(400)
+        .json({ error: "Leave start date cannot be before joining date" });
+    }
+
+    // 3️⃣ Validation: end_date must not be before start_date
+    if (endDate < startDate) {
+      return res
+        .status(400)
+        .json({ error: "End date cannot be before start date" });
+    }
+
+    // 4️⃣ Calculate number of days requested (inclusive of both start and end)
+    const daysRequested =
+      Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+
+    // 5️⃣ Fetch already approved leaves
+    const [approvedLeaves] = await db.query(
+      "SELECT SUM(DATEDIFF(end_date, start_date) + 1) AS used_leaves FROM leaves WHERE employee_id = ? AND status = 'APPROVED'",
+      [employee_id]
+    );
+
+    const usedLeaves = approvedLeaves[0].used_leaves || 0;
+    const remainingLeaves = employee[0].leave_balance - usedLeaves;
+
+    // 6️⃣ Check if requested days exceed remaining leaves
+    if (daysRequested > remainingLeaves) {
+      return res.status(400).json({
+        error: `Insufficient leave balance. You have only ${remainingLeaves} day(s) remaining.`,
+      });
+    }
+
+    // 7️⃣ Insert leave request
     const [result] = await db.query(
       "INSERT INTO leaves (employee_id, start_date, end_date, status) VALUES (?, ?, ?, 'PENDING')",
       [employee_id, start_date, end_date]
     );
+
     res.status(201).json({ message: "Leave applied", id: result.insertId });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 // Approve leave
 router.put("/:id/approve", async (req, res) => {
   const connection = await db.getConnection();
-  
+
   try {
     await connection.beginTransaction();
 
@@ -128,11 +180,13 @@ router.put("/:id/approve", async (req, res) => {
     }
 
     const leave = leaveRows[0];
-    
+
     // Calculate days requested
-    const daysRequested = Math.ceil(
-      (new Date(leave.end_date) - new Date(leave.start_date)) / (1000 * 60 * 60 * 24)
-    ) + 1;
+    const daysRequested =
+      Math.ceil(
+        (new Date(leave.end_date) - new Date(leave.start_date)) /
+          (1000 * 60 * 60 * 24)
+      ) + 1;
 
     // Update leave status
     await connection.query(
